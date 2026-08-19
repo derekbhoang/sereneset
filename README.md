@@ -24,6 +24,20 @@ Automatically surfaces high-impact tasks, emerging blockers, dependencies, and s
 
 Brings tasks, project context, decisions, updates, and collaboration into one place, reducing tool fragmentation and keeping everyone aligned.
 
+## Tech Stack
+
+### Frontend:
+
+- Use **Next.js** with **React** and **TypeScript**, using the **App Router**.
+
+### Backend:
+
+- Use **NestJS** with **TypeScript**, running through its **Fastify adapter**.
+
+### Database:
+
+- Use managed **PostgreSQL** + **Drizzle ORM**, **Redis** for ephemeral workloads, and **pgvector** when AI retrieval is introduced.
+
 ## How It Works
 
 Here’s a practical way an organisation could use SereneSet from strategy to daily execution, with AI embedded throughout the workflow.
