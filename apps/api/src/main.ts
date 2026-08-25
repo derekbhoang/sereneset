@@ -13,9 +13,8 @@ async function bootstrap() {
     new FastifyAdapter(),
   );
 
-  const config = app.get<ConfigService<EnvironmentVariables, true>>(
-    ConfigService,
-  );
+  const config =
+    app.get<ConfigService<EnvironmentVariables, true>>(ConfigService);
 
   const port = config.get('PORT', { infer: true });
   const webOrigin = config.get('WEB_ORIGIN', { infer: true });
