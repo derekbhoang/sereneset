@@ -41,3 +41,37 @@ The MVP will let a small team create a workspace, plan a project, assign tasks, 
 
 A team can go from a project brief to an agreed task list, assign
 the work, and track it through completion in SereneSet.
+
+## Tech Stack
+
+- Repo: `pnpm` + Turborepo monorepo
+
+- Frontend: Next.js (App Router) + React + TypeScript
+
+- UI: Tailwind CSS + shadcn/ui
+
+- API: NestJS (Fastify adapter), REST + OpenAPI
+
+- Client data: TanStack Query
+
+- Kanban drag and drop: dnd-kit
+
+- Validation: Zod, with schemas shared between web and API
+
+- Database: PostgreSQL (Neon or AWS RDS) + Drizzle ORM
+
+- Auth: Better Auth with its organization plugin
+
+- Jobs and cache: Redis + BullMQ
+
+- AI: OpenAI API + Claude API
+
+- Email: Resend
+
+- CI/CD: GitHub Actions
+
+- Testing and quality: Vitest, Testcontainers, Playwright
+
+- Observability: Sentry, Pino, OpenTelemetry, Grafana Cloud, Langfuse; PostHog for product analytics
+
+- Hosting: Vercel (web) + docker container on Railway or Render or AWS ECS (API)
