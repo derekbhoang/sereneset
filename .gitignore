@@ -3,6 +3,11 @@ node_modules/
 
 # Build output
 dist/
+.next/
 
 # Turborepo cache
 .turbo/
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
