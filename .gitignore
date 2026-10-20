@@ -11,3 +11,8 @@ dist/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local env files
+.env
+.env.*
+!.env.example
