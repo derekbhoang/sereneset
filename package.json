@@ -17,7 +17,9 @@
     "db:up": "docker compose up --wait --wait-timeout 60 postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
-    "db:shell": "docker compose exec postgres psql -U sereneset -d sereneset"
+    "db:shell": "docker compose exec postgres psql -U sereneset -d sereneset",
+    "db:generate": "pnpm --filter @sereneset/api db:generate",
+    "db:migrate": "pnpm --filter @sereneset/api db:migrate"
   },
   
   "devDependencies": {

@@ -9,6 +9,24 @@ export const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
+  BETTER_AUTH_SECRET: z
+    .string()
+    .min(32, "BETTER_AUTH_SECRET must contain at least 32 characters"),
+
+  BETTER_AUTH_URL: z.url({
+    protocol: /^https?$/,
+    hostname: /.+/,
+  }),
+
+  WEB_ORIGIN: z
+    .url({
+      protocol: /^https?$/,
+      hostname: /.+/,
+    })
+    .refine(
+      (value) => value === new URL(value).origin,
+      "WEB_ORIGIN must contain only scheme, hostname, and optional port",
+    ),
 });
 
 export type Env = z.infer<typeof envSchema>;
