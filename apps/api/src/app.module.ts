@@ -4,6 +4,7 @@ import { AppController } from "./app.controller.js";
 import { AppService } from "./app.service.js";
 import { envSchema } from "./config/env.js";
 import { DatabaseModule } from "./database/database.module.js";
+import { AuthModule } from "./auth/auth.module.js";
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { DatabaseModule } from "./database/database.module.js";
       validationSchema: envSchema,
     }),
     DatabaseModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

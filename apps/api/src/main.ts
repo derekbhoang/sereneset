@@ -5,6 +5,7 @@ import {
   type NestFastifyApplication,
 } from "@nestjs/platform-fastify";
 import { AppModule } from "./app.module.js";
+import { configureApp } from "./configure-app.js";
 import type { Env } from "./config/env.js";
 
 const app = await NestFactory.create<NestFastifyApplication>(
@@ -12,9 +13,10 @@ const app = await NestFactory.create<NestFastifyApplication>(
   new FastifyAdapter(),
 );
 
-const config = app.get<ConfigService<Env>>(ConfigService);
-
+configureApp(app);
 app.enableShutdownHooks();
+
+const config = app.get<ConfigService<Env>>(ConfigService);
 
 await app.listen(
   config.getOrThrow("PORT", { infer: true }),
