@@ -13,14 +13,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 import { configureApp } from "../src/configure-app.js";
 import { randomUUID } from "node:crypto";
-
-function cookieHeader(setCookie: string | string[] | undefined): string {
-  const values = setCookie === undefined
-    ? []
-    : Array.isArray(setCookie) ? setCookie : [setCookie];
-
-  return values.map((value) => value.split(";")[0]).join("; ");
-}
+import { mergeUserCookies } from "./helpers/cookies.js";
 
 describe("AppController (e2e)", () => {
   let app: NestFastifyApplication | undefined;
@@ -109,16 +102,9 @@ describe("AppController (e2e)", () => {
     const signupUser = signup.json().user;
 
     // 2. Convert response Set-Cookie headers into a request Cookie header.
-    const setCookie = signup.headers["set-cookie"];
-
-    if (!setCookie) {
-      throw new Error("Signup did not return a session cookie");
-    }
-
-    const cookie = (Array.isArray(setCookie) ? setCookie : [setCookie])
-      .map((value) => value.split(";")[0])
-      .join("; ");
-
+    const caller = { cookie: "" };
+    mergeUserCookies(caller, signup.headers["set-cookie"]);
+    const cookie = caller.cookie;
     expect(cookie).not.toBe("");
 
     // 3. Confirm the cookie authenticates the registered user.
@@ -151,6 +137,8 @@ describe("AppController (e2e)", () => {
 
     expect(signout.statusCode).toBe(200);
     expect(signout.json()).toMatchObject({ success: true });
+    mergeUserCookies(caller, signout.headers["set-cookie"]);
+    expect(caller.cookie).toBe("");
 
     // 5. Replay the original cookie to verify server-side invalidation.
     const expiredSession = await app.inject({
@@ -180,17 +168,20 @@ describe("AppController (e2e)", () => {
     expect(signup.statusCode).toBe(200);
 
     const userId = signup.json().user.id;
-    const signupCookie = cookieHeader(signup.headers["set-cookie"]);
-    expect(signupCookie).not.toBe("");
+    const caller = { cookie: "" };
+    mergeUserCookies(caller, signup.headers["set-cookie"]);
+    expect(caller.cookie).not.toBe("");
 
     const signout = await app.inject({
       method: "POST",
       url: "/api/auth/sign-out",
-      headers: { origin, cookie: signupCookie },
+      headers: { origin, cookie: caller.cookie },
       payload: {},
     });
 
     expect(signout.statusCode).toBe(200);
+    mergeUserCookies(caller, signout.headers["set-cookie"]);
+    expect(caller.cookie).toBe("");
 
     // Sign in without carrying the signup cookie.
     const signin = await app.inject({
@@ -205,13 +196,13 @@ describe("AppController (e2e)", () => {
       user: { id: userId, email },
     });
 
-    const signinCookie = cookieHeader(signin.headers["set-cookie"]);
-    expect(signinCookie).not.toBe("");
+    mergeUserCookies(caller, signin.headers["set-cookie"]);
+    expect(caller.cookie).not.toBe("");
 
     const session = await app.inject({
       method: "GET",
       url: "/api/auth/get-session",
-      headers: { origin, cookie: signinCookie },
+      headers: { origin, cookie: caller.cookie },
     });
 
     expect(session.statusCode).toBe(200);
@@ -260,12 +251,14 @@ describe("AppController (e2e)", () => {
     });
 
     // Any cookies returned by the failed attempt must not authenticate.
+    const caller = { cookie: "" };
+    mergeUserCookies(caller, signin.headers["set-cookie"]);
     const session = await app.inject({
       method: "GET",
       url: "/api/auth/get-session",
       headers: {
         origin,
-        cookie: cookieHeader(signin.headers["set-cookie"]),
+        cookie: caller.cookie,
       },
     });
 
