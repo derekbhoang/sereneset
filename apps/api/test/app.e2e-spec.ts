@@ -240,6 +240,43 @@ describe("AppController (e2e)", () => {
     ]);
   });
 
+  it("lists only the authenticated user's workspaces", async () => {
+    if (!app) throw new Error("Test app was not initialized");
+
+    const owner = await signUpUser(app);
+    const otherUser = await signUpUser(app);
+    const firstWorkspace = await createWorkspace(app, owner);
+    const secondWorkspace = await createWorkspace(app, owner);
+    const otherWorkspace = await createWorkspace(app, otherUser);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/auth/organization/list",
+      headers: { origin: "http://localhost:3000", cookie: owner.cookie },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const workspaces = response.json();
+    expect(workspaces).toHaveLength(2);
+    expect(workspaces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining(firstWorkspace),
+        expect.objectContaining(secondWorkspace),
+      ]),
+    );
+
+    const otherResponse = await app.inject({
+      method: "GET",
+      url: "/api/auth/organization/list",
+      headers: { origin: "http://localhost:3000", cookie: otherUser.cookie },
+    });
+
+    expect(otherResponse.statusCode).toBe(200);
+    expect(otherResponse.json()).toEqual([
+      expect.objectContaining(otherWorkspace),
+    ]);
+  });
+
   it("selects a workspace and persists it in the user's session", async () => {
     if (!app) throw new Error("Test app was not initialized");
 
