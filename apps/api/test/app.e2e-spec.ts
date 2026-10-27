@@ -9,11 +9,16 @@ import {
   type StartedPostgreSqlContainer,
 } from "@testcontainers/postgresql";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 import { configureApp } from "../src/configure-app.js";
 import { randomUUID } from "node:crypto";
 import { mergeUserCookies } from "./helpers/cookies.js";
+import { getSession, signUpUser } from "./helpers/auth.js";
+import { createWorkspace, setActiveWorkspace } from "./helpers/workspaces.js";
+import { DatabaseService } from "../src/database/database.service.js";
+import { member } from "../src/database/schema/auth.js";
 
 describe("AppController (e2e)", () => {
   let app: NestFastifyApplication | undefined;
@@ -83,47 +88,23 @@ describe("AppController (e2e)", () => {
     const origin = "http://localhost:3000";
 
     // 1. Register a user.
-    const signup = await app.inject({
-      method: "POST",
-      url: "/api/auth/sign-up/email",
-      headers: { origin },
-      payload: {
-        name: "Test User",
-        email,
-        password: "Test-password-123!",
-      },
-    });
+    const caller = await signUpUser(app, { email });
 
-    expect(signup.statusCode).toBe(200);
-    expect(signup.json()).toMatchObject({
-      user: { email, name: "Test User" },
-    });
-
-    const signupUser = signup.json().user;
-
-    // 2. Convert response Set-Cookie headers into a request Cookie header.
-    const caller = { cookie: "" };
-    mergeUserCookies(caller, signup.headers["set-cookie"]);
+    // 2. Save the original cookie for replay after signout.
     const cookie = caller.cookie;
-    expect(cookie).not.toBe("");
 
     // 3. Confirm the cookie authenticates the registered user.
-    const session = await app.inject({
-      method: "GET",
-      url: "/api/auth/get-session",
-      headers: { origin, cookie },
-    });
+    const session = await getSession(app, caller);
 
-    expect(session.statusCode).toBe(200);
-    expect(session.json()).toMatchObject({
+    expect(session).toMatchObject({
       user: {
-        id: signupUser.id,
+        id: caller.userId,
         email,
         name: "Test User",
       },
       session: {
         id: expect.any(String),
-        userId: signupUser.id,
+        userId: caller.userId,
       },
     });
 
@@ -141,14 +122,9 @@ describe("AppController (e2e)", () => {
     expect(caller.cookie).toBe("");
 
     // 5. Replay the original cookie to verify server-side invalidation.
-    const expiredSession = await app.inject({
-      method: "GET",
-      url: "/api/auth/get-session",
-      headers: { origin, cookie },
-    });
+    const expiredSession = await getSession(app, { cookie });
 
-    expect(expiredSession.statusCode).toBe(200);
-    expect(expiredSession.json()).toBeNull();
+    expect(expiredSession).toBeNull();
   });
 
   it("signs in an existing user and creates a working session", async () => {
@@ -158,19 +134,12 @@ describe("AppController (e2e)", () => {
     const password = "Test-password-123!";
     const origin = "http://localhost:3000";
 
-    const signup = await app.inject({
-      method: "POST",
-      url: "/api/auth/sign-up/email",
-      headers: { origin },
-      payload: { name: "Signin User", email, password },
+    const caller = await signUpUser(app, {
+      name: "Signin User",
+      email,
+      password,
     });
-
-    expect(signup.statusCode).toBe(200);
-
-    const userId = signup.json().user.id;
-    const caller = { cookie: "" };
-    mergeUserCookies(caller, signup.headers["set-cookie"]);
-    expect(caller.cookie).not.toBe("");
+    const userId = caller.userId;
 
     const signout = await app.inject({
       method: "POST",
@@ -199,14 +168,9 @@ describe("AppController (e2e)", () => {
     mergeUserCookies(caller, signin.headers["set-cookie"]);
     expect(caller.cookie).not.toBe("");
 
-    const session = await app.inject({
-      method: "GET",
-      url: "/api/auth/get-session",
-      headers: { origin, cookie: caller.cookie },
-    });
+    const session = await getSession(app, caller);
 
-    expect(session.statusCode).toBe(200);
-    expect(session.json()).toMatchObject({
+    expect(session).toMatchObject({
       user: { id: userId, email },
       session: {
         id: expect.any(String),
@@ -221,18 +185,11 @@ describe("AppController (e2e)", () => {
     const email = `wrong-password-${randomUUID()}@example.com`;
     const origin = "http://localhost:3000";
 
-    const signup = await app.inject({
-      method: "POST",
-      url: "/api/auth/sign-up/email",
-      headers: { origin },
-      payload: {
-        name: "Password Test User",
-        email,
-        password: "Correct-password-123!",
-      },
+    await signUpUser(app, {
+      name: "Password Test User",
+      email,
+      password: "Correct-password-123!",
     });
-
-    expect(signup.statusCode).toBe(200);
 
     // Do not pass the signup cookies to this request.
     const signin = await app.inject({
@@ -253,17 +210,87 @@ describe("AppController (e2e)", () => {
     // Any cookies returned by the failed attempt must not authenticate.
     const caller = { cookie: "" };
     mergeUserCookies(caller, signin.headers["set-cookie"]);
-    const session = await app.inject({
-      method: "GET",
-      url: "/api/auth/get-session",
-      headers: {
-        origin,
-        cookie: caller.cookie,
+    const session = await getSession(app, caller);
+
+    expect(session).toBeNull();
+  });
+
+  it("creates a workspace with an owner membership for its creator", async () => {
+    if (!app) throw new Error("Test app was not initialized");
+
+    const owner = await signUpUser(app);
+    const workspace = await createWorkspace(app, owner);
+    const db = app.get(DatabaseService).db;
+
+    const memberships = await db
+      .select({
+        userId: member.userId,
+        organizationId: member.organizationId,
+        role: member.role,
+      })
+      .from(member)
+      .where(eq(member.organizationId, workspace.id));
+
+    expect(memberships).toEqual([
+      {
+        userId: owner.userId,
+        organizationId: workspace.id,
+        role: "owner",
       },
+    ]);
+  });
+
+  it("selects a workspace and persists it in the user's session", async () => {
+    if (!app) throw new Error("Test app was not initialized");
+
+    const owner = await signUpUser(app);
+    const workspace = await createWorkspace(app, owner);
+
+    // Creation activates the workspace, so clear it to exercise selection.
+    const cleared = await setActiveWorkspace(app, owner, null);
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.json()).toBeNull();
+    expect(await getSession(app, owner)).toMatchObject({
+      session: { userId: owner.userId, activeOrganizationId: null },
     });
 
-    expect(session.statusCode).toBe(200);
-    expect(session.json()).toBeNull();
+    const selected = await setActiveWorkspace(app, owner, workspace.id);
+    expect(selected.statusCode).toBe(200);
+    expect(selected.json()).toMatchObject(workspace);
+    expect(await getSession(app, owner)).toMatchObject({
+      user: { id: owner.userId },
+      session: {
+        userId: owner.userId,
+        activeOrganizationId: workspace.id,
+      },
+    });
+  });
+
+  it("rejects workspace selection by a non-member", async () => {
+    if (!app) throw new Error("Test app was not initialized");
+
+    const owner = await signUpUser(app);
+    const workspace = await createWorkspace(app, owner);
+    const outsider = await signUpUser(app);
+
+    const response = await setActiveWorkspace(app, outsider, workspace.id);
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({
+      code: "USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION",
+    });
+    expect(await getSession(app, outsider)).toMatchObject({
+      user: { id: outsider.userId },
+      session: { userId: outsider.userId, activeOrganizationId: null },
+    });
+
+    const db = app.get(DatabaseService).db;
+    const memberships = await db
+      .select()
+      .from(member)
+      .where(eq(member.userId, outsider.userId));
+
+    expect(memberships).toEqual([]);
   });
 
   it("allows credentialed requests from the web origin", async () => {
