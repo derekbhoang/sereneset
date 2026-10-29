@@ -4,7 +4,7 @@ import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { fromNodeHeaders } from "better-auth/node";
 
 import type { Env } from "../config/env.js";
-import { AUTH } from "./auth.module.js";
+import { AUTH } from "./auth.tokens.js";
 import type { Auth } from "./auth.js";
 
 export function registerAuthRoutes(

@@ -5,12 +5,13 @@ import { DatabaseModule } from "../database/database.module.js";
 import { DatabaseService } from "../database/database.service.js";
 import * as schema from "../database/schema/auth.js";
 import { createAuth } from "./auth.js";
-
-export const AUTH = Symbol("AUTH");
+import { AUTH } from "./auth.tokens.js";
+import { SessionGuard } from "./session.guard.js";
 
 @Module({
   imports: [DatabaseModule],
   providers: [
+    SessionGuard,
     {
       provide: AUTH,
       inject: [DatabaseService, ConfigService],
@@ -31,6 +32,6 @@ export const AUTH = Symbol("AUTH");
         }),
     },
   ],
-  exports: [AUTH],
+  exports: [AUTH, SessionGuard],
 })
 export class AuthModule {}
