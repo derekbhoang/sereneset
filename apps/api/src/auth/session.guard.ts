@@ -10,6 +10,7 @@ import { fromNodeHeaders } from "better-auth/node";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { Auth } from "./auth.js";
 import { AUTH } from "./auth.tokens.js";
+import { kAPIErrorHeaderSymbol } from "better-call";
 
 export type AuthSession = Auth["$Infer"]["Session"];
 
@@ -50,11 +51,28 @@ export class SessionGuard implements CanActivate {
       request.auth = response;
       return true;
     } catch (error) {
-      if (isAPIError(error) && error.statusCode === 401) {
-        throw new UnauthorizedException({
-          code: "UNAUTHENTICATED",
-          message: "Authentication required",
-        });
+      if (isAPIError(error)) {
+        const accumulated: unknown = Reflect.get(
+          error,
+          kAPIErrorHeaderSymbol,
+        );
+
+        const headers =
+          accumulated instanceof Headers
+            ? accumulated
+            : new Headers(error.headers);
+
+        const cookies = headers.getSetCookie();
+        if (cookies.length > 0) {
+          reply.header("set-cookie", cookies);
+        }
+
+        if (error.statusCode === 401) {
+          throw new UnauthorizedException({
+            code: "UNAUTHENTICATED",
+            message: "Authentication required",
+          });
+        }
       }
 
       throw error;
