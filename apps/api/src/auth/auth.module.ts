@@ -34,6 +34,6 @@ import { WorkspaceGuard } from "./workspace.guard.js";
         }),
     },
   ],
-  exports: [AUTH, SessionGuard, WorkspaceGuard],
+  exports: [AUTH, SessionGuard, WorkspaceGuard, DatabaseModule],
 })
 export class AuthModule {}
