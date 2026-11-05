@@ -7,11 +7,13 @@ import * as schema from "../database/schema/auth.js";
 import { createAuth } from "./auth.js";
 import { AUTH } from "./auth.tokens.js";
 import { SessionGuard } from "./session.guard.js";
+import { WorkspaceGuard } from "./workspace.guard.js";
 
 @Module({
   imports: [DatabaseModule],
   providers: [
     SessionGuard,
+    WorkspaceGuard,
     {
       provide: AUTH,
       inject: [DatabaseService, ConfigService],
@@ -32,6 +34,6 @@ import { SessionGuard } from "./session.guard.js";
         }),
     },
   ],
-  exports: [AUTH, SessionGuard],
+  exports: [AUTH, SessionGuard, WorkspaceGuard],
 })
 export class AuthModule {}
