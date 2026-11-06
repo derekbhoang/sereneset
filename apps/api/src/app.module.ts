@@ -5,6 +5,7 @@ import { AppService } from "./app.service.js";
 import { envSchema } from "./config/env.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { AuthModule } from "./auth/auth.module.js";
+import { ProjectsModule } from "./projects/projects.module.js";
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { AuthModule } from "./auth/auth.module.js";
     }),
     DatabaseModule,
     AuthModule,
+    ProjectsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
