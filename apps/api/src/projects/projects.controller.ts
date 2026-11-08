@@ -12,12 +12,18 @@ import {
   Query,
 } from "@nestjs/common";
 import {
+  CreateProjectInput as CreateProjectInputSchema,
+  ListProjectsQuery as ListProjectsQuerySchema,
+  ProjectParams as ProjectParamsSchema,
+  UpdateProjectInput as UpdateProjectInputSchema,
+} from "@sereneset/contracts";
+import type {
   CreateProjectInput,
   ListProjectsQuery,
+  Project,
+  ProjectListResponse,
   ProjectParams,
   UpdateProjectInput,
-  type Project,
-  type ProjectListResponse,
 } from "@sereneset/contracts";
 import { CurrentWorkspace } from "../auth/current-workspace.decorator.js";
 import { RequireWorkspace } from "../auth/require-workspace.decorator.js";
@@ -36,7 +42,7 @@ export class ProjectsController {
   @Post()
   create(
     @CurrentWorkspace() workspace: WorkspaceContext,
-    @Body(new ZodValidationPipe(CreateProjectInput))
+    @Body(new ZodValidationPipe(CreateProjectInputSchema))
     input: CreateProjectInput,
   ): Promise<Project> {
     return this.projects.create(workspace, input);
@@ -45,7 +51,7 @@ export class ProjectsController {
   @Get()
   list(
     @CurrentWorkspace() workspace: WorkspaceContext,
-    @Query(new ZodValidationPipe(ListProjectsQuery))
+    @Query(new ZodValidationPipe(ListProjectsQuerySchema))
     query: ListProjectsQuery,
   ): Promise<ProjectListResponse> {
     return this.projects.list(workspace, query);
@@ -54,7 +60,7 @@ export class ProjectsController {
   @Get(":id")
   findOne(
     @CurrentWorkspace() workspace: WorkspaceContext,
-    @Param(new ZodValidationPipe(ProjectParams))
+    @Param(new ZodValidationPipe(ProjectParamsSchema))
     params: ProjectParams,
   ): Promise<Project> {
     return this.projects.findOne(workspace, params.id);
@@ -63,9 +69,9 @@ export class ProjectsController {
   @Patch(":id")
   update(
     @CurrentWorkspace() workspace: WorkspaceContext,
-    @Param(new ZodValidationPipe(ProjectParams))
+    @Param(new ZodValidationPipe(ProjectParamsSchema))
     params: ProjectParams,
-    @Body(new ZodValidationPipe(UpdateProjectInput))
+    @Body(new ZodValidationPipe(UpdateProjectInputSchema))
     input: UpdateProjectInput,
   ): Promise<Project> {
     return this.projects.update(workspace, params.id, input);
@@ -75,7 +81,7 @@ export class ProjectsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(
     @CurrentWorkspace() workspace: WorkspaceContext,
-    @Param(new ZodValidationPipe(ProjectParams))
+    @Param(new ZodValidationPipe(ProjectParamsSchema))
     params: ProjectParams,
   ): Promise<void> {
     await this.projects.remove(workspace, params.id);
