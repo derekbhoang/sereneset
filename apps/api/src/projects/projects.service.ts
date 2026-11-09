@@ -11,7 +11,7 @@ import type {
   ProjectListResponse,
   UpdateProjectInput,
 } from "@sereneset/contracts";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { WorkspaceContext } from "../auth/workspace.guard.js";
 import { DatabaseService } from "../database/database.service.js";
 import { project } from "../database/schema/project.js";
@@ -76,7 +76,10 @@ export class ProjectsService {
             : undefined,
         ),
       )
-      .orderBy(desc(project.createdAt), desc(project.id))
+      .orderBy(
+        sql`${project.createdAt} desc nulls last`,
+        sql`${project.id} desc nulls last`,
+      )
       .limit(query.limit + 1);
 
     const page = rows.slice(0, query.limit);
