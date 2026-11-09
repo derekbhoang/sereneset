@@ -30,6 +30,58 @@ async function request(
 describe("Projects (e2e)", () => {
   const getApp = setupTestApp();
 
+  it("uses current role permissions for every action on the same session", async () => {
+    const app = getApp();
+    const owner = await signUpUser(app);
+    const workspace = await createWorkspace(app, owner);
+    const db = app.get(DatabaseService).db;
+    const created = await request(app, owner, "POST", "/api/projects", {
+      name: "Protected project",
+    });
+    expect(created.statusCode).toBe(201);
+    const original = Project.parse(created.json());
+
+    const membership = and(
+      eq(member.organizationId, workspace.id),
+      eq(member.userId, owner.userId),
+    );
+    await db.update(member).set({ role: "guest" }).where(membership);
+
+    const attempts = [
+      { method: "POST", url: "/api/projects", payload: { name: "Forbidden" } },
+      { method: "GET", url: "/api/projects" },
+      { method: "GET", url: `/api/projects/${original.id}` },
+      {
+        method: "PATCH",
+        url: `/api/projects/${original.id}`,
+        payload: { name: "Forbidden" },
+      },
+      { method: "DELETE", url: `/api/projects/${original.id}` },
+    ] as const;
+
+    for (const attempt of attempts) {
+      const response = await request(
+        app,
+        owner,
+        attempt.method,
+        attempt.url,
+        "payload" in attempt ? attempt.payload : undefined,
+      );
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({
+        code: "PROJECT_PERMISSION_DENIED",
+      });
+    }
+
+    await db.update(member).set({ role: "member" }).where(membership);
+    const restored = await request(app, owner, "GET", "/api/projects");
+    expect(restored.statusCode).toBe(200);
+    expect(ProjectListResponse.parse(restored.json())).toEqual({
+      items: [original],
+      nextCursor: null,
+    });
+  });
+
   it("performs CRUD while preserving ownership and omitted fields", async () => {
     const app = getApp();
     const owner = await signUpUser(app);

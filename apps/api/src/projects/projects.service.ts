@@ -16,6 +16,7 @@ import type { WorkspaceContext } from "../auth/workspace.guard.js";
 import { DatabaseService } from "../database/database.service.js";
 import { project } from "../database/schema/project.js";
 import { decodeProjectCursor, encodeProjectCursor } from "./project-cursor.js";
+import { assertProjectPermission } from "./project-permissions.js";
 
 type ProjectRow = typeof project.$inferSelect;
 
@@ -30,6 +31,8 @@ export class ProjectsService {
     workspace: WorkspaceContext,
     input: CreateProjectInput,
   ): Promise<Project> {
+    assertProjectPermission(workspace, "create");
+
     const [created] = await this.database.db
       .insert(project)
       .values({
@@ -54,6 +57,8 @@ export class ProjectsService {
     workspace: WorkspaceContext,
     query: ListProjectsQuery,
   ): Promise<ProjectListResponse> {
+    assertProjectPermission(workspace, "read");
+
     const cursor =
       query.cursor === undefined
         ? undefined
@@ -85,6 +90,8 @@ export class ProjectsService {
   }
 
   async findOne(workspace: WorkspaceContext, id: string): Promise<Project> {
+    assertProjectPermission(workspace, "read");
+
     const [found] = await this.database.db
       .select()
       .from(project)
@@ -108,6 +115,8 @@ export class ProjectsService {
     id: string,
     input: UpdateProjectInput,
   ): Promise<Project> {
+    assertProjectPermission(workspace, "update");
+
     const [updated] = await this.database.db
       .update(project)
       .set({
@@ -131,6 +140,8 @@ export class ProjectsService {
   }
 
   async remove(workspace: WorkspaceContext, id: string): Promise<void> {
+    assertProjectPermission(workspace, "delete");
+
     const [deleted] = await this.database.db
       .delete(project)
       .where(
