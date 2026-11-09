@@ -9,7 +9,7 @@ export function configureApp(app: NestFastifyApplication): void {
   app.enableCors({
     origin: config.getOrThrow("WEB_ORIGIN", { infer: true }),
     credentials: true,
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   });
 

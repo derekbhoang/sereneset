@@ -30,6 +30,146 @@ async function request(
 describe("Projects (e2e)", () => {
   const getApp = setupTestApp();
 
+  it("rejects missing authentication, missing selection, and revoked membership", async () => {
+    const app = getApp();
+
+    const unauthenticated = await app.inject({
+      method: "GET",
+      url: "/api/projects",
+    });
+    expect(unauthenticated.statusCode).toBe(401);
+    expect(unauthenticated.json()).toMatchObject({
+      code: "UNAUTHENTICATED",
+    });
+
+    const editor = await signUpUser(app);
+    const unselected = await request(app, editor, "GET", "/api/projects");
+    expect(unselected.statusCode).toBe(409);
+    expect(unselected.json()).toMatchObject({
+      code: "ACTIVE_WORKSPACE_REQUIRED",
+    });
+
+    const owner = await signUpUser(app);
+    const workspace = await createWorkspace(app, owner);
+    const db = app.get(DatabaseService).db;
+
+    await db.insert(member).values({
+      id: randomUUID(),
+      organizationId: workspace.id,
+      userId: editor.userId,
+      role: "member",
+      createdAt: new Date(),
+    });
+
+    expect(
+      (await setActiveWorkspace(app, editor, workspace.id)).statusCode,
+    ).toBe(200);
+
+    const created = await request(app, editor, "POST", "/api/projects", {
+      name: "Retained project",
+    });
+    expect(created.statusCode).toBe(201);
+    const original = Project.parse(created.json());
+
+    await db.delete(member).where(
+      and(
+        eq(member.organizationId, workspace.id),
+        eq(member.userId, editor.userId),
+      ),
+    );
+
+    // Reuse the editor's existing session after membership removal.
+    const denied = await request(
+      app,
+      editor,
+      "GET",
+      `/api/projects/${original.id}`,
+    );
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json()).toMatchObject({
+      code: "WORKSPACE_ACCESS_DENIED",
+    });
+
+    // Historical attribution and project data survive membership removal.
+    const retained = await request(
+      app,
+      owner,
+      "GET",
+      `/api/projects/${original.id}`,
+    );
+    expect(retained.statusCode).toBe(200);
+    expect(Project.parse(retained.json())).toEqual(original);
+  });
+
+  it("rejects invalid requests without changing project data", async () => {
+    const app = getApp();
+    const owner = await signUpUser(app);
+    await createWorkspace(app, owner);
+
+    const created = await request(app, owner, "POST", "/api/projects", {
+      name: "Unchanged",
+    });
+    expect(created.statusCode).toBe(201);
+    const original = Project.parse(created.json());
+
+    for (const payload of [
+      { name: " " },
+      { name: "x".repeat(256) },
+      { name: "Spoofed", organizationId: "another-id" },
+      { name: "Spoofed", createdByUserId: "another-id" },
+    ]) {
+      const response = await request(
+        app,
+        owner,
+        "POST",
+        "/api/projects",
+        payload,
+      );
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    for (const payload of [
+      {},
+      { name: "Changed", organizationId: "another-id" },
+      { name: "Changed", createdByUserId: "another-id" },
+    ]) {
+      const response = await request(
+        app,
+        owner,
+        "PATCH",
+        `/api/projects/${original.id}`,
+        payload,
+      );
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    for (const url of [
+      "/api/projects/not-a-uuid",
+      "/api/projects?limit=0",
+      "/api/projects?limit=101",
+      "/api/projects?limit=1&limit=2",
+    ]) {
+      const response = await request(app, owner, "GET", url);
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    const listed = await request(app, owner, "GET", "/api/projects");
+    expect(listed.statusCode).toBe(200);
+    expect(ProjectListResponse.parse(listed.json())).toEqual({
+      items: [original],
+      nextCursor: null,
+    });
+  });
+
   it("uses current role permissions for every action on the same session", async () => {
     const app = getApp();
     const owner = await signUpUser(app);

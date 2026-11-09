@@ -3,6 +3,42 @@ import { setupTestApp } from "./helpers/test-app.js";
 describe("App (e2e)", () => {
   const getApp = setupTestApp();
 
+  it.each(["PATCH", "DELETE"])(
+    "allows credentialed %s preflight requests",
+    async (method) => {
+      const origin = "http://localhost:3000";
+      const response = await getApp().inject({
+        method: "OPTIONS",
+        url: "/api/projects/00000000-0000-4000-8000-000000000001",
+        headers: {
+          origin,
+          "access-control-request-method": method,
+          "access-control-request-headers": "content-type",
+        },
+      });
+
+      expect(response.statusCode).toBe(204);
+      expect(response.headers["access-control-allow-origin"]).toBe(origin);
+      expect(response.headers["access-control-allow-credentials"]).toBe("true");
+
+      const allowedMethods = String(
+        response.headers["access-control-allow-methods"],
+      )
+        .split(",")
+        .map((value) => value.trim());
+
+      const allowedHeaders = String(
+        response.headers["access-control-allow-headers"],
+      )
+        .toLowerCase()
+        .split(",")
+        .map((value) => value.trim());
+
+      expect(allowedMethods).toContain(method);
+      expect(allowedHeaders).toContain("content-type");
+    },
+  );
+
   it("/ (GET)", async () => {
     const app = getApp();
 
